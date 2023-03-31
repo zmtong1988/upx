@@ -148,7 +148,7 @@ ACC_COMPILE_TIME_ASSERT_HEADER(sizeof(upx_charptr_unit_type) == 1)
 typedef upx_int64_t upx_off_t;
 #undef off_t
 #if 0
-// at some future point we can do this...
+// TODO cleanup: at some future point we can do this...
 #define off_t DO_NOT_USE_off_t
 #else
 #define off_t upx_off_t

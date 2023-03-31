@@ -146,82 +146,99 @@ ACC_COMPILE_TIME_ASSERT_HEADER((wchar_t) -1 > 0)
 namespace {
 
 template <class T>
+struct CheckIntegral {
+    template <class U>
+    static void checkU(void) {
+#if __cplusplus < 202002L
+        COMPILE_TIME_ASSERT(std::is_pod<U>::value) // deprecated in C++20
+#endif
+        COMPILE_TIME_ASSERT(std::is_standard_layout<U>::value)
+        COMPILE_TIME_ASSERT(std::is_trivial<U>::value)
+        // extra checks, these are probably implied by std::is_trivial
+        COMPILE_TIME_ASSERT(std::is_nothrow_default_constructible<U>::value)
+        COMPILE_TIME_ASSERT(std::is_trivially_copyable<U>::value)
+        COMPILE_TIME_ASSERT(std::is_trivially_default_constructible<U>::value)
+        // UPX
+        COMPILE_TIME_ASSERT(upx_is_integral<U>::value)
+        COMPILE_TIME_ASSERT(upx_is_integral_v<U>)
+    }
+    static void check(void) {
+        checkU<T>();
+        checkU<typename std::add_const<T>::type>();
+#if !defined(__GNUC__)
+        // TODO later: "volatile" seems to be broken with some older g++/libstdc++ versions??
+        checkU<typename std::add_volatile<T>::type>();
+        checkU<typename std::add_cv<T>::type>();
+#endif
+    }
+};
+template <class T>
+struct CheckAlignment {
+    static void check(void) {
+        COMPILE_TIME_ASSERT_ALIGNED1(T)
+        struct alignas(1) Test1 {
+            char a;
+            T b;
+        };
+        struct alignas(1) Test2 {
+            char a;
+            T b[3];
+        };
+        COMPILE_TIME_ASSERT_ALIGNED1(Test1)
+        COMPILE_TIME_ASSERT_ALIGNED1(Test2)
+        Test1 t1[7];
+        Test2 t2[7];
+        COMPILE_TIME_ASSERT(sizeof(Test1) == 1 + sizeof(T))
+        COMPILE_TIME_ASSERT(sizeof(t1) == 7 + 7 * sizeof(T))
+        COMPILE_TIME_ASSERT(sizeof(Test2) == 1 + 3 * sizeof(T))
+        COMPILE_TIME_ASSERT(sizeof(t2) == 7 + 21 * sizeof(T))
+        UNUSED(t1);
+        UNUSED(t2);
+    }
+};
+template <class T>
 struct TestBELE {
     static noinline bool test(void) {
-        // POD checks
-        {
-            COMPILE_TIME_ASSERT(std::is_standard_layout<T>::value)
-            COMPILE_TIME_ASSERT(std::is_trivial<T>::value)
-            // extra checks, these are probably implied by std::is_trivial
-            COMPILE_TIME_ASSERT(std::is_nothrow_default_constructible<T>::value)
-            COMPILE_TIME_ASSERT(std::is_trivially_copyable<T>::value)
-            COMPILE_TIME_ASSERT(std::is_trivially_default_constructible<T>::value)
-            // UPX
-            COMPILE_TIME_ASSERT(upx_is_integral<T>::value)
-            COMPILE_TIME_ASSERT(upx_is_integral_v<T>)
-        }
-        // alignment checks
-        {
-            COMPILE_TIME_ASSERT_ALIGNED1(T)
-            struct alignas(1) test1_t {
-                char a;
-                T b;
-            };
-            struct alignas(1) test2_t {
-                char a;
-                T b[3];
-            };
-            COMPILE_TIME_ASSERT_ALIGNED1(test1_t)
-            COMPILE_TIME_ASSERT_ALIGNED1(test2_t)
-            test1_t t1[7];
-            test2_t t2[7];
-            COMPILE_TIME_ASSERT(sizeof(test1_t) == 1 + sizeof(T))
-            COMPILE_TIME_ASSERT(sizeof(t1) == 7 + 7 * sizeof(T))
-            COMPILE_TIME_ASSERT(sizeof(test2_t) == 1 + 3 * sizeof(T))
-            COMPILE_TIME_ASSERT(sizeof(t2) == 7 + 21 * sizeof(T))
-            UNUSED(t1);
-            UNUSED(t2);
-        }
+        CheckIntegral<T>::check();
+        CheckAlignment<T>::check();
         // arithmetic checks (modern compilers will optimize this away)
-        {
-            T allbits;
-            allbits = 0;
-            allbits += 1;
-            allbits -= 2;
-            T v1;
-            v1 = 1;
-            v1 *= 2;
-            v1 /= 1;
-            v1 -= 1;
-            T v2;
-            v2 = 1;
-            assert((v1 == v2));
-            assert(!(v1 != v2));
-            assert((v1 <= v2));
-            assert((v1 >= v2));
-            assert(!(v1 < v2));
-            assert(!(v1 > v2));
-            v2 ^= allbits;
-            assert(!(v1 == v2));
-            assert((v1 != v2));
-            assert((v1 <= v2));
-            assert(!(v1 >= v2));
-            assert((v1 < v2));
-            assert(!(v1 > v2));
-            v2 += 2;
-            assert(v1 == 1);
-            assert(v2 == 0);
-            v1 <<= 1;
-            v1 |= v2;
-            v1 >>= 1;
-            v2 &= v1;
-            v2 /= v1;
-            v2 *= v1;
-            assert(v1 == 1);
-            assert(v2 == 0);
-            if ((v1 ^ v2) != 1)
-                return false;
-        }
+        T allbits;
+        allbits = 0;
+        allbits += 1;
+        allbits -= 2;
+        T v1;
+        v1 = 1;
+        v1 *= 2;
+        v1 /= 1;
+        v1 -= 1;
+        T v2;
+        v2 = 1;
+        assert((v1 == v2));
+        assert(!(v1 != v2));
+        assert((v1 <= v2));
+        assert((v1 >= v2));
+        assert(!(v1 < v2));
+        assert(!(v1 > v2));
+        v2 ^= allbits;
+        assert(!(v1 == v2));
+        assert((v1 != v2));
+        assert((v1 <= v2));
+        assert(!(v1 >= v2));
+        assert((v1 < v2));
+        assert(!(v1 > v2));
+        v2 += 2;
+        assert(v1 == 1);
+        assert(v2 == 0);
+        v1 <<= 1;
+        v1 |= v2;
+        v1 >>= 1;
+        v2 &= v1;
+        v2 /= v1;
+        v2 *= v1;
+        assert(v1 == 1);
+        assert(v2 == 0);
+        if ((v1 ^ v2) != 1)
+            return false;
         return true;
     }
 };
@@ -277,6 +294,18 @@ void upx_compiler_sanity_check(void) {
     COMPILE_TIME_ASSERT_ALIGNED1(LE16)
     COMPILE_TIME_ASSERT_ALIGNED1(LE32)
     COMPILE_TIME_ASSERT_ALIGNED1(LE64)
+
+    CheckIntegral<char>::check();
+    CheckIntegral<signed char>::check();
+    CheckIntegral<unsigned char>::check();
+    CheckIntegral<short>::check();
+    CheckIntegral<int>::check();
+    CheckIntegral<long>::check();
+    CheckIntegral<long long>::check();
+    CheckIntegral<ptrdiff_t>::check();
+    CheckIntegral<size_t>::check();
+    CheckIntegral<upx_off_t>::check();
+    CheckIntegral<upx_uintptr_t>::check();
 
     COMPILE_TIME_ASSERT(sizeof(upx_charptr_unit_type) == 1)
     COMPILE_TIME_ASSERT_ALIGNED1(upx_charptr_unit_type)
