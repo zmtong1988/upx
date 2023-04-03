@@ -1,4 +1,4 @@
-/* p_com.h --
+/* p_com.h -- dos/com executable format
 
    This file is part of the UPX executable compressor.
 
@@ -41,7 +41,7 @@ public:
     virtual int getVersion() const override { return 13; }
     virtual int getFormat() const override { return UPX_F_DOS_COM; }
     virtual const char *getName() const override { return "dos/com"; }
-    virtual const char *getFullName(const options_t *) const override { return "i086-dos16.com"; }
+    virtual const char *getFullName(const Options *) const override { return "i086-dos16.com"; }
     virtual const int *getCompressionMethods(int method, int level) const override;
     virtual const int *getFilters() const override;
 
@@ -52,13 +52,12 @@ public:
     virtual int canUnpack() override;
 
 protected:
-    virtual unsigned getCallTrickOffset() const { return 0x100; }
     virtual Linker *newLinker() const override;
-
-protected:
+    void addFilter16(int filter_id);
+    // dos/sys will override these:
+    virtual unsigned getCallTrickOffset() const { return 0x100; }
     virtual void buildLoader(const Filter *ft) override;
-    virtual void patchLoader(OutputFile *fo, upx_byte *, int, unsigned);
-    virtual void addFilter16(int filter_id);
+    virtual void patchLoader(OutputFile *fo, byte *, int, unsigned);
 };
 
 #endif /* already included */

@@ -25,9 +25,10 @@
    <markus@oberhumer.com>               <ezerotven+github@gmail.com>
  */
 
-// work.cpp implements the central loop, and it uses class PackMaster to
-// dispatch. PackMaster by itself will instatiate a concrete subclass
+// This file implements the central loop, and it uses class PackMaster to
+// dispatch. PackMaster by itself will instantiate a concrete subclass
 // of class Packer which then does the actual work.
+// And see p_com.cpp for a simple executable format.
 
 #include "conf.h"
 #include "file.h"
@@ -140,7 +141,7 @@ void do_one_file(const char *iname, char *oname) {
             else
                 flags |= O_EXCL;
             int shmode = SH_DENYWR;
-#if defined(__MINT__)
+#if (ACC_ARCH_M68K && ACC_OS_TOS && ACC_CC_GNUC) && defined(__MINT__)
             flags |= O_TRUNC;
             shmode = O_DENYRW;
 #endif
@@ -155,7 +156,7 @@ void do_one_file(const char *iname, char *oname) {
         }
     }
 
-    // handle command
+    // handle command - actual work is here
     PackMaster pm(&fi, opt);
     if (opt->cmd == CMD_COMPRESS)
         pm.pack(&fo);
@@ -258,14 +259,14 @@ static void unlink_ofile(char *oname) {
         IGNORE_ERROR(r);
 #endif
         if (unlink(oname) == 0)
-            oname[0] = 0;
+            oname[0] = 0; // done with oname
     }
 }
 
 int do_files(int i, int argc, char *argv[]) {
     upx_compiler_sanity_check();
     if (opt->verbose >= 1) {
-        show_head();
+        show_header();
         UiPacker::uiHeader();
     }
 

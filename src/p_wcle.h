@@ -26,8 +26,6 @@
  */
 
 #pragma once
-#ifndef UPX_P_WCLE_H__
-#define UPX_P_WCLE_H__ 1
 
 /*************************************************************************
 // watcom/le
@@ -41,7 +39,7 @@ public:
     virtual int getVersion() const override { return 13; }
     virtual int getFormat() const override { return UPX_F_WATCOM_LE; }
     virtual const char *getName() const override { return "watcom/le"; }
-    virtual const char *getFullName(const options_t *) const override {
+    virtual const char *getFullName(const Options *) const override {
         return "i386-dos32.watcom.le";
     }
     virtual const int *getCompressionMethods(int method, int level) const override;
@@ -87,7 +85,5 @@ protected:
     bool has_extra_code;
     unsigned neweip;
 };
-
-#endif /* already included */
 
 /* vim:set ts=4 sw=4 et: */

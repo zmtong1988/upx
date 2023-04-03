@@ -31,7 +31,7 @@
 //
 **************************************************************************/
 
-unsigned long Throwable::counter = 0;
+/*static*/ upx_std_atomic(size_t) Throwable::debug_counter;
 
 Throwable::Throwable(const char *m, int e, bool w) noexcept : super(),
                                                               msg(nullptr),
@@ -40,8 +40,8 @@ Throwable::Throwable(const char *m, int e, bool w) noexcept : super(),
     if (m)
         msg = strdup(m);
 #if 0
-    fprintf(stderr, "construct exception: %s %lu\n", msg, counter);
-    counter++;
+    fprintf(stderr, "construct exception: %s %zu\n", msg, debug_counter);
+    debug_counter += 1;
 #endif
 }
 
@@ -52,15 +52,15 @@ Throwable::Throwable(const Throwable &other) noexcept : super(other),
     if (other.msg)
         msg = strdup(other.msg);
 #if 0
-    fprintf(stderr, "copy exception: %s %lu\n", msg, counter);
-    counter++;
+    fprintf(stderr, "copy exception: %s %zu\n", msg, debug_counter);
+    debug_counter += 1;
 #endif
 }
 
 Throwable::~Throwable() noexcept {
 #if 0
-    counter--;
-    fprintf(stderr, "destruct exception: %s %lu\n", msg, counter);
+    debug_counter -= 1;
+    fprintf(stderr, "destruct exception: %s %zu\n", msg, debug_counter);
 #endif
     if (msg)
         free(msg);
@@ -137,6 +137,30 @@ void throwEOFException(const char *msg, int e) {
     if (msg == nullptr && e == 0)
         msg = "premature end of file";
     throw EOFException(msg, e);
+}
+
+/*************************************************************************
+//
+**************************************************************************/
+
+template <>
+void throwCantPack(const char *format, ...) {
+    char msg[1024];
+    va_list ap;
+    va_start(ap, format);
+    (void) upx_safe_vsnprintf(msg, sizeof(msg), format, ap);
+    va_end(ap);
+    throwCantPack(msg);
+}
+
+template <>
+void throwCantUnpack(const char *format, ...) {
+    char msg[1024];
+    va_list ap;
+    va_start(ap, format);
+    (void) upx_safe_vsnprintf(msg, sizeof(msg), format, ap);
+    va_end(ap);
+    throwCantUnpack(msg);
 }
 
 /*************************************************************************
