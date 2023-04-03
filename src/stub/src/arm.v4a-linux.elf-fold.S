@@ -61,8 +61,8 @@ PATH_MAX= 4096
 #endif  /*}*/
 
 #define OVERHEAD 2048
-#define MAX_ELF_HDR 512
 #define call bl
+#include "MAX_ELF_HDR.S"
 
 mflg_data: .int MAP_PRIVATE|MAP_ANONYMOUS  @ overwritten for QNX vs Linux
 
@@ -161,7 +161,7 @@ link_ok:
         @ldr r5,[sp,#F_f_exp]
         ldmia sp!,{r4,r10,r11}  @ LENX, ADRX, elfaddr
 F_delta= 3*4
-        sub sp,sp,#MAX_ELF_HDR + OVERHEAD  @ alloca
+        sub sp,sp,#MAX_ELF_HDR_32 + OVERHEAD  @ alloca
         ldr r9,[r10,#sz_cpr]  @ xi.size  of ELF headers
         mov r8,sp  @ xo.ptr
         ldr r7,[r10,#sz_unc]  @ xo.size
@@ -178,7 +178,7 @@ F_delta= 3*4
 // xo={sz_unc, &tmp_ehdr}, xi={sz_cpr, &b_info}, elfaddr
         call upx_main
         add sp,sp,#(9-4)*4
-        add sp,sp,#MAX_ELF_HDR + OVERHEAD  @ un-alloca
+        add sp,sp,#MAX_ELF_HDR_32 + OVERHEAD  @ un-alloca
 #if DEBUG  //{
         stmdb sp!,{TRACE_REGS}; mov r0,#0x14; bl trace
 #endif  //}
@@ -247,7 +247,7 @@ sweep:
         mov r7,#0
         mov r12,#0
 #endif  /*}*/
-        ldr pc,[r2,#4 -2*4]  @ Elf32_auxv_t[AT_NULL@.a_type].a_val
+        mov pc,lr
 
 proc_self_exe:
         .ascii "/proc/self/exe"  @ no terminator
@@ -409,9 +409,16 @@ readlink:
 munmap:
         do_sys __NR_munmap; ret
 
-        .globl mprotect
-mprotect:
+// Sometimes Linux enforces page-aligned address
+Pprotect: .globl Pprotect
+mprotect: .globl mprotect
+        ldr r12,m_off4k
+        and r12,r12,r0
+        sub r0,r0,r12
+        add r1,r1,r12
         do_sys __NR_mprotect; ret
+m_off4k:
+        .word -1+ (1<<PAGE_SHIFT)  // offset mask for 4KiB
 
         .globl __clear_cache
 __clear_cache:
@@ -450,6 +457,7 @@ mmap_privanon: .globl mmap_privanon
 
 #if 1|DEBUG  /*{*/
 
+__udivsi3: .globl __udivsi3
 div10: .globl div10
         mov ip,r0  @ extra copy used at end
         sub r1,r1,r1  @ hi

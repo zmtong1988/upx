@@ -36,7 +36,7 @@ NBPW=  4
         .set noat
         .altmacro
 
-PAGE_SHIFT= 12
+PAGE_SHIFT= 16  // 64KiB is better default than 4KiB on MIPS
 PAGE_MASK= 0xffffffffffffffff<<PAGE_SHIFT
 
 sz_Ehdr= 52
@@ -67,7 +67,7 @@ __NR_write    =   4+ __NR_Linux
 
 PATHSIZE=4096
 OVERHEAD=2048
-MAX_ELF_HDR=512
+#include "MAX_ELF_HDR.S"
 
 MAP_PRIVATE=  0x002
 MAP_ANONYMOUS=0x800  # not same as i386
@@ -161,7 +161,7 @@ L30:  // copy auxv
           addu tmp,a1,v0
         sb $0,(tmp)  # null terminate the path
 0:
-        addiu sp,-MAX_ELF_HDR  # alloca
+        addiu sp,-MAX_ELF_HDR_32  # alloca
         move t3,$r_PMASK  # page_mask
         move t2,$r_elfa  # &Elf32_Ehdr of stub
         move t1,zero  # &f_unfilter
@@ -171,6 +171,7 @@ L30:  // copy auxv
         move a1,$r_LENX  # total_size
 
 BAL=0x04110000
+        .extern upx_main
 /* We need a position-independent call of upx_main, which is external.
    "bal upx_main" cannot be assembled by mipsel-elf-as-20060406.
    ".long BAL + upx_main" then changing R_MIPS_32 to R_MIPS_PC16
@@ -189,7 +190,7 @@ BAL=0x04110000
 /* entry= upx_main(b_info *a0, total_size a1, Elf32_Ehdr *a2, Elf32_Auxv_t *a3,
         f_decompr t0, f_unfilter t1, Elf32_Ehdr &t2, page_mask t3 )
 */
-        addiu sp,MAX_ELF_HDR  # un-alloca
+        addiu sp,MAX_ELF_HDR_32  # un-alloca
         move $r_fexp,v0  # &entry
 
 p_vaddr= 4+4
@@ -243,6 +244,15 @@ p_vaddr= 4+4
           li v0,__NR_munmap
 L40:
         jr $r_fexp  # omit munmap
+          nop
+
+Pprotect: .globl Pprotect
+        li tmp,~PAGE_MASK
+        and tmp,a0
+        sub a0,tmp
+        add a1,tmp
+        li v0,__NR_mprotect; syscall
+        j ra
           nop
 
 #if 0  /*{ replaced by macros in include/linux.h because of 'bal' vs gcc */

@@ -74,7 +74,9 @@
         EM_PPC64  = 21,
         EM_ARM    = 40,
         EM_X86_64 = 62,
+        EM_AMD64  = EM_X86_64,
         EM_AARCH64 = 183,
+        EM_ARM64  = EM_AARCH64,
 
     };
     enum { // e_version
@@ -125,9 +127,12 @@
         SHT_FINI_ARRAY = 15,    /* Array of destructors */
         SHT_PREINIT_ARRAY = 16, /* Array of pre-constructors */
         SHT_GROUP = 17,         /* Section group */
-        SHT_SYMTAB_SHNDX = 18,  /* Extended section indeces */
+        SHT_SYMTAB_SHNDX = 18,  /* Extended section indices */
+        SHT_GNU_HASH =    0x6ffffff6,   /* GNU-style hash table.  */
         SHT_GNU_LIBLIST = 0x6ffffff7, /* Prelink library list */
-        SHT_GNU_HASH =  0x6ffffff6,   /* GNU-style hash table.  */
+        SHT_GNU_verdef =  0x6ffffffd,   /* Version definition section.  */
+        SHT_GNU_verneed = 0x6ffffffe,   /* Version needs section.  */
+        SHT_GNU_versym =  0x6fffffff,   /* Version symbol table.  */
 
         SHT_LOOS   = 0x60000000,  /* LOcal OS; SHT_ANDROID_REL{,A} is +1, +2 */
         SHT_LOPROC = 0x70000000, /* Start of processor-specific */
@@ -229,6 +234,12 @@
 #undef WANT_REL_ENUM
     static inline unsigned ELF32_R_TYPE(unsigned     x) { return       0xff & x; }
     static inline unsigned ELF64_R_TYPE(upx_uint64_t x) { return 0xffffffff & (unsigned)x; }
+    static inline unsigned ELF32_R_SYM(unsigned     x) { return x >> 8; }
+    static inline unsigned ELF64_R_SYM(upx_uint64_t x) { return x >> 32; }
+    static inline unsigned    ELF32_R_INFO(unsigned sym, unsigned type)
+        { return (sym << 8) + (type & 0xff); }
+    static inline upx_int64_t ELF64_R_INFO(unsigned sym, unsigned type)
+        { return ((upx_uint64_t)sym << 32) + type; }
 
 #   undef R_PPC_RELATIVE
 #   undef R_PPC64_RELATIVE
@@ -249,9 +260,12 @@
         R_PPC64_JMP_SLOT = R_PPC_JMP_SLOT,
         R_X86_64_JUMP_SLOT = 7,
 
+        R_386_32 = 1,
         R_ARM_ABS32 = 2,
         R_ARM_GLOB_DAT = 21,
 
+        R_386_GLOB_DAT = 6,
+        R_X86_64_64 = 1,
         R_AARCH64_ABS64 = 257,
         R_AARCH64_GLOB_DAT = 1025,
 

@@ -30,6 +30,7 @@
 */
 
 #include "arch/i386/macros.S"
+NBPW= 4
 
 
 PAGE_SIZE= ( 1<<12)
@@ -55,6 +56,7 @@ __NR_munmap=   91
 __NR_open= 5
 __NR_close= 6
 __NR_mmap= 0xc0
+__NR_mprotect= 0x7d
 
 MAP_PRIVATE=   0x02
 MAP_FIXED=     0x10
@@ -160,8 +162,8 @@ F_fd= 6*4  // frame offset to fd
         pop esi  // LENX: total_size
         pop ecx  // elfaddr
 #define OVERHEAD 2048
-#define MAX_ELF_HDR 512
-        sub esp, MAX_ELF_HDR + OVERHEAD  // alloca
+#include "MAX_ELF_HDR.S"
+        sub esp, MAX_ELF_HDR_32 + OVERHEAD  // alloca
         mov edx, esp  // &tmp
         push ecx  // elfaddr (9th arg)
         mov ebx, [   eax]  // length of uncompressed ELF headers
@@ -184,7 +186,7 @@ F_fd= 6*4  // frame offset to fd
 // Buggy programs may depend on uninit stack being 0, so clear what we used.
         mov edx,edi  // save auxv
         mov edi,esp
-        mov ecx,((8 +1)*4 + MAX_ELF_HDR + OVERHEAD) >>2  // 8 params, elfaddr, un-alloca
+        mov ecx,((8 +1)*4 + MAX_ELF_HDR_32 + OVERHEAD) >>2  // 8 params, elfaddr, un-alloca
         xor eax,eax  // 0
         rep stosd  // clear frame on exit
         mov esp,edi  // end of frame
@@ -234,6 +236,19 @@ L60:
 
         mov al, __NR_munmap  // eax was 0 from L60
         jmp [edi]  // unmap ourselves via escape hatch, then goto entry
+
+// Sometimes linux enforces page-aligned address
+Pprotect: .globl Pprotect
+    xchg ebx,[1*NBPW + esp]  // save reg, %ebx= address
+    mov ecx,ebx  // copy address
+    and ebx, ~0<<12  // page align
+    sub ecx,%ebx  // extra length
+    add ecx,[2*NBPW + esp]  // length
+    mov edx,[3*NBPW + esp]  // bits
+    push __NR_mprotect; pop %eax; int 0x80
+    cmp eax, -0x1000; jna 0f; hlt; 0:
+    mov ebx,[1*NBPW + esp]  // restore reg
+    ret
 
 mmap: .globl mmap  // what happened to the ebx->args_on_stack method?
         push ebp

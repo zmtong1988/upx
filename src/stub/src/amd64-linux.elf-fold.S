@@ -51,7 +51,6 @@ PROT_READ=     0x1
 O_RDONLY=       0
 
 OVERHEAD=2048
-MAX_ELF_HDR=1024
 
 /* 64-bit mode only! */
 __NR_read=  0
@@ -187,6 +186,13 @@ sysgo:  # NOTE: kernel demands 4th arg in %sys4, NOT %arg4
         orq $~0,%rax  # failure; IGNORE errno
 no_fail:
         ret
+
+Pprotect: .globl Pprotect
+        movl $~PAGE_MASK,%ecx  // frag mask
+        and %edi,%ecx  // frag
+        sub %rcx,%rdi
+        add %rcx,%rsi
+        jmp mprotect
 
 exit: .globl exit
         movb $ __NR_exit,%al; 5: jmp 5f
