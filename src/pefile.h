@@ -26,8 +26,6 @@
  */
 
 #pragma once
-#ifndef UPX_PEFILE_H__
-#define UPX_PEFILE_H__ 1
 
 #include "util/membuffer.h"
 
@@ -58,7 +56,7 @@ protected:
     unsigned handleStripRelocs(upx_uint64_t ih_imagebase, upx_uint64_t default_imagebase,
                                LE16 &dllflags);
 
-    virtual bool handleForceOption() = 0;
+    virtual bool needForceOption() const = 0;
     virtual void callCompressWithFilters(Filter &, int filter_strategy, unsigned ih_codebase);
     virtual void defineSymbols(unsigned ncsection, unsigned upxsection, unsigned sizeof_oh,
                                unsigned isize_isplit, unsigned s1addr) = 0;
@@ -84,6 +82,7 @@ protected:
     int canUnpack0(unsigned max_sections, unsigned objs, unsigned ih_entry, unsigned ih_size);
 
 protected:
+    static int checkMachine(unsigned cpu);
     virtual int readFileHeader();
     virtual bool testUnpackVersion(int version) const override;
     virtual void readPeHeader() = 0;
@@ -94,13 +93,13 @@ protected:
     unsigned processImports0(ord_mask_t ord_mask);
 
     template <typename LEXX, typename ord_mask_t>
-    void rebuildImports(SPAN_S(upx_byte) & extrainfo, ord_mask_t ord_mask, bool set_oft);
+    void rebuildImports(SPAN_S(byte) & extra_info, ord_mask_t ord_mask, bool set_oft);
     virtual unsigned processImports() = 0;
     virtual void processImports2(unsigned, unsigned);
     MemBuffer mb_oimport;
-    SPAN_0(upx_byte) oimport = nullptr;
+    SPAN_0(byte) oimport = nullptr;
     unsigned soimport;
-    upx_byte *oimpdlls;
+    byte *oimpdlls;
     unsigned soimpdlls;
     ImportLinker *ilinker;
     virtual const char *kernelDll() const { return "KERNEL32.DLL"; }
@@ -110,25 +109,25 @@ protected:
 
     virtual void processRelocs() = 0;
     void processRelocs(Reloc *);
-    void rebuildRelocs(SPAN_S(upx_byte) &, unsigned bits, unsigned flags, upx_uint64_t imagebase);
+    void rebuildRelocs(SPAN_S(byte) &, unsigned bits, unsigned flags, upx_uint64_t imagebase);
     MemBuffer mb_orelocs;
-    SPAN_0(upx_byte) orelocs = nullptr;
+    SPAN_0(byte) orelocs = nullptr;
     unsigned sorelocs;
-    upx_byte *oxrelocs = nullptr;
+    byte *oxrelocs = nullptr;
     unsigned soxrelocs;
 
     void processExports(Export *);
     void processExports(Export *, unsigned);
     void rebuildExports();
     MemBuffer mb_oexport;
-    SPAN_0(upx_byte) oexport = nullptr;
+    SPAN_0(byte) oexport = nullptr;
     unsigned soexport;
 
     void processResources(Resource *);
     void processResources(Resource *, unsigned);
-    void rebuildResources(SPAN_S(upx_byte) &, unsigned);
+    void rebuildResources(SPAN_S(byte) &, unsigned);
     MemBuffer mb_oresources;
-    SPAN_0(upx_byte) oresources = nullptr;
+    SPAN_0(byte) oresources = nullptr;
     unsigned soresources;
 
     template <typename>
@@ -144,17 +143,17 @@ protected:
 
     void rebuildTls();
     MemBuffer mb_otls;
-    SPAN_0(upx_byte) otls = nullptr;
+    SPAN_0(byte) otls = nullptr;
     unsigned sotls;
     unsigned tlsindex;
     unsigned tlscb_ptr;
-    unsigned tls_handler_offset;
-    bool use_tls_callbacks;
+    unsigned tls_handler_offset = 0;
+    bool use_tls_callbacks = false;
 
     void processLoadConf(Reloc *, const Interval *, unsigned);
     void processLoadConf(Interval *);
     MemBuffer mb_oloadconf;
-    upx_byte *oloadconf;
+    byte *oloadconf = nullptr;
     unsigned soloadconf;
 
     unsigned stripDebug(unsigned);
@@ -162,8 +161,8 @@ protected:
     unsigned icondir_offset;
     int icondir_count;
 
-    bool importbyordinal;
-    bool kernel32ordinal;
+    bool importbyordinal = false;
+    bool kernel32ordinal = false;
     unsigned rvamin;
     unsigned cimports; // rva of preprocessed imports
     unsigned crelocs;  // rva of preprocessed fixups
@@ -173,20 +172,22 @@ protected:
         LE32 vaddr;
         LE32 size;
     };
-    ddirs_t *iddirs;
-    ddirs_t *oddirs;
-
-    struct alignas(1) import_desc {
-        LE32 oft; // orig first thunk
-        char _[8];
-        LE32 dllname;
-        LE32 iat; // import address table
-    };
+    ddirs_t *iddirs = nullptr;
+    ddirs_t *oddirs = nullptr;
 
     LE32 &IDSIZE(unsigned x);
     LE32 &IDADDR(unsigned x);
     LE32 &ODSIZE(unsigned x);
     LE32 &ODADDR(unsigned x);
+    const LE32 &IDSIZE(unsigned x) const;
+    const LE32 &IDADDR(unsigned x) const;
+
+    struct alignas(1) import_desc {
+        LE32 oft; // orig first thunk
+        byte _[8];
+        LE32 dllname;
+        LE32 iat; // import address table
+    };
 
     struct alignas(1) pe_section_t {
         char name[8];
@@ -194,21 +195,32 @@ protected:
         LE32 vaddr;
         LE32 size;
         LE32 rawdataptr;
-        char _[12];
+        byte _[12];
         LE32 flags;
     };
 
     MemBuffer mb_isection;
     SPAN_0(pe_section_t) isection = nullptr;
-    bool isdll;
-    bool isrtm;
-    bool isefi;
-    bool use_dep_hack;
-    bool use_clear_dirty_stack;
-    bool use_stub_relocs;
+    bool isdll = false;
+    bool isrtm = false;
+    bool isefi = false;
+    bool use_dep_hack = true;
+    bool use_clear_dirty_stack = true;
+    bool use_stub_relocs = true;
 
     static unsigned virta2objnum(unsigned, SPAN_0(pe_section_t), unsigned);
     unsigned tryremove(unsigned, unsigned);
+
+    enum {
+        IMAGE_FILE_MACHINE_UNKNOWN = 0,
+        IMAGE_FILE_MACHINE_AMD64 = 0x8664,   // win64/pe (amd64)
+        IMAGE_FILE_MACHINE_ARM = 0x01c0,     // wince/arm (Windows CE)
+        IMAGE_FILE_MACHINE_ARM64 = 0xaa64,   // win64/arm64
+        IMAGE_FILE_MACHINE_ARM64EC = 0xa641, // win64/arm64ec
+        IMAGE_FILE_MACHINE_ARMNT = 0x01c4,   // win32/arm
+        IMAGE_FILE_MACHINE_I386 = 0x014c,    // win32/pe (i386)
+        IMAGE_FILE_MACHINE_THUMB = 0x01c2,   // wince/arm (Windows CE)
+    };
 
     enum {
         PEDIR_EXPORT = 0,
@@ -259,7 +271,6 @@ protected:
         FBIG_ENDIAN = 0x8000,
     };
 
-    // NEW: DLL characteristics definition for ASLR, ... - Stefan Widmann
     enum {
         IMAGE_DLLCHARACTERISTICS_HIGH_ENTROPY_VA = 0x0020,
         IMAGE_DLLCHARACTERISTICS_DYNAMIC_BASE = 0x0040,
@@ -268,15 +279,16 @@ protected:
         IMAGE_DLLCHARACTERISTICS_NO_ISOLATION = 0x0200,
         IMAGE_DLLCHARACTERISTICS_NO_SEH = 0x0400,
         IMAGE_DLLCHARACTERISTICS_NO_BIND = 0x0800,
+        IMAGE_DLLCHARACTERISTICS_APPCONTAINER = 0x1000,
         IMAGE_DLLCHARACTERISTICS_WDM_DRIVER = 0x2000,
-        IMAGE_DLLCHARACTERISTICS_CONTROL_FLOW_GUARD = 0x4000,
+        IMAGE_DLLCHARACTERISTICS_GUARD_CF = 0x4000,
         IMAGE_DLLCHARACTERISTICS_TERMINAL_SERVER_AWARE = 0x8000,
     };
 
     enum {
         IMAGE_SUBSYSTEM_UNKNOWN = 0,
         IMAGE_SUBSYSTEM_NATIVE = 1,
-        IMAGE_SUBSYSTEM_WINDOWS_GUI = 2, // Grapical
+        IMAGE_SUBSYSTEM_WINDOWS_GUI = 2, // Graphical
         IMAGE_SUBSYSTEM_WINDOWS_CUI = 3, // Character-mode
         IMAGE_SUBSYSTEM_WINDOWS_OS2_CUI = 5,
         IMAGE_SUBSYSTEM_WINDOWS_POSIX_CUI = 7,
@@ -342,7 +354,7 @@ protected:
     };
 
     class Reloc : private noncopyable {
-        upx_byte *start;
+        byte *start;
         unsigned size;
 
         void newRelocPos(void *p);
@@ -353,14 +365,14 @@ protected:
         unsigned counts[16];
 
     public:
-        Reloc(upx_byte *, unsigned);
-        Reloc(unsigned rnum);
+        Reloc(byte *, unsigned);
+        Reloc(unsigned relocnum);
         //
         bool next(unsigned &pos, unsigned &type);
         const unsigned *getcounts() const { return counts; }
         //
         void add(unsigned pos, unsigned type);
-        void finish(upx_byte *&p, unsigned &size);
+        void finish(byte *&p, unsigned &size);
     };
 
     class Resource : private noncopyable {
@@ -372,58 +384,58 @@ protected:
         struct upx_rleaf;
 
         MemBuffer mb_start;
-        const upx_byte *start;
-        upx_byte *newstart;
+        const byte *start;
+        byte *newstart;
         upx_rnode *root;
         upx_rleaf *head;
         upx_rleaf *current;
         unsigned dsize;
         unsigned ssize;
 
-        const upx_byte *ibufstart;
-        const upx_byte *ibufend;
+        const byte *ibufstart;
+        const byte *ibufend;
 
         void check(const res_dir *, unsigned);
         upx_rnode *convert(const void *, upx_rnode *, unsigned);
         void build(const upx_rnode *, unsigned &, unsigned &, unsigned);
-        void clear(upx_byte *, unsigned, Interval *);
+        void clear(byte *, unsigned, Interval *);
         void dump(const upx_rnode *, unsigned) const;
         void destroy(upx_rnode *urd, unsigned level);
 
         void ibufcheck(const void *m, unsigned size);
 
     public:
-        Resource(const upx_byte *ibufstart, const upx_byte *ibufen);
-        Resource(const upx_byte *p, const upx_byte *ibufstart, const upx_byte *ibufend);
+        Resource(const byte *ibufstart, const byte *ibufen);
+        Resource(const byte *p, const byte *ibufstart, const byte *ibufend);
         ~Resource();
-        void init(const upx_byte *);
+        void init(const byte *);
 
         unsigned dirsize() const;
         bool next();
 
         unsigned itype() const;
-        const upx_byte *ntype() const;
+        const byte *ntype() const;
         unsigned size() const;
         unsigned offs() const;
         unsigned &newoffs();
 
-        upx_byte *build();
+        byte *build();
         bool clear();
 
         void dump() const;
         unsigned iname() const;
-        const upx_byte *nname() const;
+        const byte *nname() const;
         /*
          unsigned ilang() const {return current->id;}
-         const upx_byte *nlang() const {return current->name;}
+         const byte *nlang() const {return current->name;}
          */
     };
 
     class Export : private noncopyable {
         struct alignas(1) export_dir_t {
-            char _[12]; // flags, timedate, version
+            byte _[12]; // flags, timedate, version
             LE32 name;
-            char __[4]; // ordinal base
+            byte __[4]; // ordinal base
             LE32 functions;
             LE32 names;
             LE32 addrtable;
@@ -470,16 +482,17 @@ protected:
     virtual void processTls(Reloc *, const Interval *, unsigned) override;
 
     struct alignas(1) pe_header_t {
-        // 0x0
-        char _[4]; // pemagic
-        LE16 cpu;
-        LE16 objects; // number of sections
-        char __[12];  // timestamp + reserved
-        LE16 opthdrsize;
-        LE16 flags; // characteristics
-        // optional header
+        // 0x00
+        byte _[4]; // pemagic
+        // 0x04 IMAGE_FILE_HEADER
+        LE16 cpu;        // IMAGE_FILE_MACHINE_xxx
+        LE16 objects;    // NumberOfSections
+        byte __[12];     // timestamp + reserved
+        LE16 opthdrsize; // SizeOfOptionalHeader
+        LE16 flags;      // Characteristics
+        // 0x18 IMAGE_OPTIONAL_HEADER32
         LE16 coffmagic; // NEW: Stefan Widmann
-        char ___[2];    // linkerversion
+        byte ___[2];    // linkerversion
         LE32 codesize;
         // 0x20
         LE32 datasize;
@@ -493,18 +506,18 @@ protected:
         LE32 objectalign;
         LE32 filealign; // should set to 0x200 ?
         // 0x40
-        char ____[16]; // versions
+        byte ____[16]; // versions
         // 0x50
         LE32 imagesize;
         LE32 headersize;
-        LE32 chksum; // should set to 0
-        LE16 subsystem;
-        LE16 dllflags;
+        LE32 chksum;    // should set to 0
+        LE16 subsystem; // IMAGE_SUBSYSTEM_xxx
+        LE16 dllflags;  // IMAGE_DLLCHARACTERISTICS_xxx
         // 0x60
-        char _____[20]; // stack + heap sizes
+        byte _____[20]; // stack + heap sizes
         // 0x74
         LE32 ddirsentries; // usually 16
-
+        // 0x78
         ddirs_t ddirs[16];
     };
 
@@ -530,16 +543,17 @@ protected:
     virtual void processTls(Reloc *, const Interval *, unsigned) override;
 
     struct alignas(1) pe_header_t {
-        // 0x0
-        char _[4]; // pemagic
-        LE16 cpu;
-        LE16 objects; // number of sections
-        char __[12];  // timestamp + reserved
-        LE16 opthdrsize;
-        LE16 flags; // characteristics
-        // optional header
+        // 0x00
+        byte _[4]; // pemagic
+        // 0x04 IMAGE_FILE_HEADER
+        LE16 cpu;        // IMAGE_FILE_MACHINE_xxx
+        LE16 objects;    // NumberOfSections
+        byte __[12];     // timestamp + reserved
+        LE16 opthdrsize; // SizeOfOptionalHeader
+        LE16 flags;      // Characteristics
+        // 0x18 IMAGE_OPTIONAL_HEADER64
         LE16 coffmagic; // NEW: Stefan Widmann
-        char ___[2];    // linkerversion
+        byte ___[2];    // linkerversion
         LE32 codesize;
         // 0x20
         LE32 datasize;
@@ -553,24 +567,22 @@ protected:
         LE32 objectalign;
         LE32 filealign; // should set to 0x200 ?
         // 0x40
-        char ____[16]; // versions
+        byte ____[16]; // versions
         // 0x50
         LE32 imagesize;
         LE32 headersize;
-        LE32 chksum; // should set to 0
-        LE16 subsystem;
-        LE16 dllflags;
+        LE32 chksum;    // should set to 0
+        LE16 subsystem; // IMAGE_SUBSYSTEM_xxx
+        LE16 dllflags;  // IMAGE_DLLCHARACTERISTICS_xxx
         // 0x60
-        char _____[36]; // stack + heap sizes + loader flag
+        byte _____[36]; // stack + heap sizes + loader flag
         // 0x84
         LE32 ddirsentries; // usually 16
-
+        // 0x88
         ddirs_t ddirs[16];
     };
 
     pe_header_t ih, oh;
 };
-
-#endif /* already included */
 
 /* vim:set ts=4 sw=4 et: */

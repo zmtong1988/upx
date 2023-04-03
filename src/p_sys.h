@@ -1,4 +1,4 @@
-/* p_sys.h --
+/* p_sys.h -- dos/sys executable format
 
    This file is part of the UPX executable compressor.
 
@@ -41,16 +41,14 @@ public:
     virtual int getVersion() const override { return 13; }
     virtual int getFormat() const override { return UPX_F_DOS_SYS; }
     virtual const char *getName() const override { return "dos/sys"; }
-    virtual const char *getFullName(const options_t *) const override { return "i086-dos16.sys"; }
+    virtual const char *getFullName(const Options *) const override { return "i086-dos16.sys"; }
 
     virtual bool canPack() override;
 
-protected:
+protected: // dos/com overrides
     virtual unsigned getCallTrickOffset() const override { return 0; }
-
-protected:
     virtual void buildLoader(const Filter *ft) override;
-    virtual void patchLoader(OutputFile *fo, upx_byte *, int, unsigned) override;
+    virtual void patchLoader(OutputFile *fo, byte *, int, unsigned) override;
 };
 
 #endif /* already included */

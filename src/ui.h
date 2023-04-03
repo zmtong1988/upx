@@ -26,8 +26,6 @@
  */
 
 #pragma once
-#ifndef UPX_UI_H__
-#define UPX_UI_H__ 1
 
 class OutputFile;
 class Packer;
@@ -41,7 +39,7 @@ public:
     UiPacker(const Packer *p_);
 
 public:
-    virtual ~UiPacker();
+    virtual ~UiPacker() noexcept;
 
     static void uiConfirmUpdate();
     static void uiPackTotal();
@@ -107,7 +105,5 @@ protected:
     static unsigned update_fc_len;
     static unsigned update_fu_len;
 };
-
-#endif /* already included */
 
 /* vim:set ts=4 sw=4 et: */

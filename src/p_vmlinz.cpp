@@ -26,6 +26,7 @@
  */
 
 
+#define ALLOW_INT_PLUS_MEMBUFFER 1
 #include "conf.h"
 
 #include "p_elf.h"
@@ -749,7 +750,7 @@ int PackVmlinuzARMEL::readFileHeader()
             return 0;
         }
     }
-    return UPX_F_VMLINUZ_ARMEL;
+    return UPX_F_VMLINUZ_ARM;
 }
 
 int PackVmlinuzARMEL::decompressKernel()

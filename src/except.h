@@ -26,10 +26,6 @@
  */
 
 #pragma once
-#ifndef UPX_EXCEPT_H__
-#define UPX_EXCEPT_H__ 1
-
-#ifdef __cplusplus
 
 const char *prettyName(const char *n) noexcept;
 
@@ -64,7 +60,7 @@ private:
     ACC_CXX_DISABLE_NEW_DELETE
 
 private:
-    static unsigned long counter; // for debugging
+    static upx_std_atomic(size_t) debug_counter; // for debugging
 };
 
 // Exceptions can/should be caught
@@ -215,10 +211,15 @@ NORET void throwOutOfMemoryException(const char *msg = nullptr);
 NORET void throwIOException(const char *msg = nullptr, int e = 0);
 NORET void throwEOFException(const char *msg = nullptr, int e = 0);
 
+template <class T>
+void throwCantPack(const T *, ...) = delete;
+template <>
+NORET void throwCantPack(const char *format, ...) attribute_format(1, 2);
+template <class T>
+void throwCantUnpack(const T *, ...) = delete;
+template <>
+NORET void throwCantUnpack(const char *format, ...) attribute_format(1, 2);
+
 #undef NORET
-
-#endif /* __cplusplus */
-
-#endif /* already included */
 
 /* vim:set ts=4 sw=4 et: */

@@ -1,10 +1,9 @@
 #
 # UPX stub Makefile - needs GNU make 3.81 or better
 #
-# You also will need a number of special build tools like various
-# cross-assemblers and cross-compilers - please see README.SRC
-# for details.
-# And see misc/rebuild-stubs-with-podman how to use Podman/Docker.
+# Preferred: see misc/rebuild-stubs-with-podman how to use Podman/Docker.
+# Otherwise you will need a number of special build tools like various
+# cross-assemblers and cross-compilers - see README.SRC.
 #
 # Copyright (C) 1996-2023 Markus Franz Xaver Johannes Oberhumer
 #
@@ -21,10 +20,6 @@ comma := ,
 empty :=
 space := $(empty) $(empty)
 tab   := $(empty)	$(empty)
-
-ifneq ($(findstring $(firstword $(MAKE_VERSION)),3.77 3.78 3.78.1 3.79 3.79.1 3.80),)
-$(error GNU make 3.81 or better is required)
-endif
 
 ifndef srcdir
 srcdir := $(dir $(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST)))
@@ -61,7 +56,7 @@ STUBS += amd64-linux.elf-so_fold.h
 STUBS += amd64-linux.kernel.vmlinux-head.h
 STUBS += amd64-linux.kernel.vmlinux.h
 STUBS += amd64-linux.shlib-init.h
-STUBS += amd64-win64.pep.h
+STUBS += amd64-win64.pe.h
 STUBS += arm.v4a-linux.elf-entry.h
 STUBS += arm.v4a-linux.elf-fold.h
 STUBS += arm.v4a-wince.pe.h
@@ -85,6 +80,7 @@ STUBS += arm64-linux.elf-fold.h
 STUBS += arm64-linux.shlib-init.h
 STUBS += arm64-darwin.macho-entry.h
 STUBS += arm64-darwin.macho-fold.h
+STUBS += arm64-win64.pe.h
 STUBS += i086-dos16.com.h
 STUBS += i086-dos16.exe.h
 STUBS += i086-dos16.sys.h
@@ -206,7 +202,7 @@ tc_objdump_disasm_options =
 ECHO_e     = /bin/echo -e
 ECHO_E     = /bin/echo -E
 PERL       = perl
-PYTHON     = python2
+PYTHON2    = python2
 UNIX2DOS  := $(PERL) -i -pe 's/$$/\r/;'
 
 # trim (strip) trailing whitespace
@@ -239,15 +235,15 @@ define tc
 endef
 
 # default tools
-tc.default.bin2h      = $(PYTHON) $(top_srcdir)/src/stub/scripts/bin2h.py --ident=auto-stub
+tc.default.bin2h      = $(PYTHON2) $(top_srcdir)/src/stub/scripts/bin2h.py --ident=auto-stub
 ##tc.default.bin2h-c    = $(call tc,bin2h) --compress=14,15,0
 tc.default.bin2h-c    = $(call tc,bin2h) --compress=0
-tc.default.brandelf   = $(PYTHON) $(top_srcdir)/src/stub/scripts/brandelf.py $(if $(tc_bfdname),--bfdname=$(tc_bfdname))
-tc.default.gpp_inc    = $(PYTHON) $(top_srcdir)/src/stub/scripts/gpp_inc.py
-tc.default.gpp_mkdep  = $(PYTHON) $(top_srcdir)/src/stub/scripts/gpp_inc.py -o /dev/null
+tc.default.brandelf   = $(PYTHON2) $(top_srcdir)/src/stub/scripts/brandelf.py $(if $(tc_bfdname),--bfdname=$(tc_bfdname))
+tc.default.gpp_inc    = $(PYTHON2) $(top_srcdir)/src/stub/scripts/gpp_inc.py
+tc.default.gpp_mkdep  = $(PYTHON2) $(top_srcdir)/src/stub/scripts/gpp_inc.py -o /dev/null
 tc.default.pp-as      = i386-linux-gcc-3.4.6 -E -nostdinc -x assembler-with-cpp -Wall
 tc.default.sstrip     = sstrip-20060518
-tc.default.xstrip     = $(PYTHON) $(top_srcdir)/src/stub/scripts/xstrip.py
+tc.default.xstrip     = $(PYTHON2) $(top_srcdir)/src/stub/scripts/xstrip.py
 
 # default multiarch-binutils
 tc.default.m-ar       = multiarch-ar-2.17
@@ -270,6 +266,7 @@ define tc.default.f-embed_objinfo
 	$(call tc,objcopy) --strip-unneeded --keep-symbol=_start $1
 	$(call tc,objcopy) -R .text -R .data -R .bss $1
 	$(call tc,objcopy) -R .comment -R .note -R .note.GNU-stack -R .reginfo $1
+	$(call tc,objdump) -Dr $(tc_objdump_disasm_options) $1 | $(RTRIM) > $1.disasm
 	$(call tc,objdump) -htr -w $1 | $(BLSQUEEZE) | sed \
 	  -e '1s/^.*: *file format/file format/' \
 	  -e 's/$(tab)/ /g' \
@@ -304,7 +301,7 @@ define tc.default.f-embed_objinfo_without_xstrip
 #   remove everything after "CONTENTS"
 	$(call tc,objdump) -htr -w $1 | $(BLSQUEEZE) | sed \
 	  -e '1s/^.*: *file format/file format/' \
-	  -e 's/	/ /g' \
+	  -e 's/$(tab)/ /g' \
 	  -e 's/ 00*/ 0/g' \
 	  -e 's/CONTENTS.*/CONTENTS/' \
 	  > $1.dump
@@ -473,19 +470,19 @@ amd64-linux.shlib-init.h : $(srcdir)/src/$$T.S
 
 
 # /***********************************************************************
-# // amd64-win64.pep
+# // amd64-win64.pe
 # ************************************************************************/
 
-amd64-win64.pep.h : tc_list = amd64-win64.pep default
-amd64-win64.pep.h : tc_bfdname = elf64-x86-64
-amd64-win64.pep.h : tc_objdump_disasm_options = -M intel-mnemonic
+amd64-win64.pe.h : tc_list = amd64-win64.pe default
+amd64-win64.pe.h : tc_bfdname = elf64-x86-64
+amd64-win64.pe.h : tc_objdump_disasm_options = -M intel-mnemonic
 
-tc.amd64-win64.pep.gcc  = amd64-linux-gcc-4.1.1 -m64 -nostdinc -MMD -MT $@
-tc.amd64-win64.pep.gcc += -fno-exceptions -fno-asynchronous-unwind-tables
-tc.amd64-win64.pep.gcc += -Wall -W -Wcast-align -Wcast-qual -Wstrict-prototypes -Wwrite-strings -Werror
-tc.amd64-win64.pep.objdump = multiarch-objdump-2.23.90
+tc.amd64-win64.pe.gcc  = amd64-linux-gcc-4.1.1 -m64 -nostdinc -MMD -MT $@
+tc.amd64-win64.pe.gcc += -fno-exceptions -fno-asynchronous-unwind-tables
+tc.amd64-win64.pe.gcc += -Wall -W -Wcast-align -Wcast-qual -Wstrict-prototypes -Wwrite-strings -Werror
+tc.amd64-win64.pe.objdump = multiarch-objdump-2.23.90
 
-amd64-win64.pep.h : $(srcdir)/src/$$T.S
+amd64-win64.pe.h : $(srcdir)/src/$$T.S
 	$(call tc,gcc) -c -x assembler-with-cpp $< -o tmp/$T.bin
 	$(call tc,f-embed_objinfo,tmp/$T.bin)
 	$(call tc,bin2h) tmp/$T.bin $@
@@ -663,6 +660,21 @@ tc.arm64-linux.shlib-init.objcopy  = arm64-linux-objcopy-2.25 -F elf64-littleaar
 tc.arm64-linux.shlib-init.objdump  = arm64-linux-objdump-2.25
 
 arm64-linux.shlib%.h : $(srcdir)/src/$$T.S
+	$(call tc,gcc) -c -x assembler-with-cpp $< -o tmp/$T.bin
+	$(call tc,f-embed_objinfo,tmp/$T.bin)
+	$(call tc,bin2h-c) tmp/$T.bin $@
+
+
+# /***********************************************************************
+# // arm64-win64.pe
+# ************************************************************************/
+
+arm64-win64.pe.h : tc_list = arm64-linux.elf default
+arm64-win64.pe.h : tc_bfdname = elf64-littleaarch64
+tc.arm64-win64.pe.objcopy  = arm64-linux-objcopy-2.25 -F elf64-littleaarch64
+tc.arm64-win64.pe.objdump  = arm64-linux-objdump-2.25
+
+arm64-win64.pe.h : $(srcdir)/src/$$T.S
 	$(call tc,gcc) -c -x assembler-with-cpp $< -o tmp/$T.bin
 	$(call tc,f-embed_objinfo,tmp/$T.bin)
 	$(call tc,bin2h-c) tmp/$T.bin $@

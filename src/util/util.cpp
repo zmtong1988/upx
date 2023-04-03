@@ -25,8 +25,9 @@
    <markus@oberhumer.com>               <ezerotven+github@gmail.com>
  */
 
+#include "../headers.h"
+#include <algorithm>
 #include "../conf.h"
-#include "util.h"
 
 #define ACC_WANT_ACC_INCI_H 1
 #include "../miniacc.h"
@@ -46,8 +47,11 @@
 
 ACC_COMPILE_TIME_ASSERT_HEADER(UPX_RSIZE_MAX_MEM == UPX_RSIZE_MAX)
 ACC_COMPILE_TIME_ASSERT_HEADER(UPX_RSIZE_MAX_STR <= UPX_RSIZE_MAX / 256)
-ACC_COMPILE_TIME_ASSERT_HEADER(2ull * UPX_RSIZE_MAX * 9 / 8 + 16 * 1024 * 1024 < INT_MAX)
-ACC_COMPILE_TIME_ASSERT_HEADER(UPX_RSIZE_MAX >= 65536 * 8192)
+ACC_COMPILE_TIME_ASSERT_HEADER(2ull * UPX_RSIZE_MAX * 9 / 8 + 256 * 1024 * 1024 < INT_MAX)
+ACC_COMPILE_TIME_ASSERT_HEADER(2ull * UPX_RSIZE_MAX * 10 / 8 + 128 * 1024 * 1024 <= INT_MAX + 1u)
+ACC_COMPILE_TIME_ASSERT_HEADER(5ull * UPX_RSIZE_MAX < UINT_MAX)
+ACC_COMPILE_TIME_ASSERT_HEADER(UPX_RSIZE_MAX >= 8192 * 65536)
+ACC_COMPILE_TIME_ASSERT_HEADER(UPX_RSIZE_MAX_STR >= 1024)
 
 upx_rsize_t mem_size(upx_uint64_t element_size, upx_uint64_t n, upx_uint64_t extra1,
                      upx_uint64_t extra2) {
@@ -98,6 +102,10 @@ TEST_CASE("mem_size") {
     CHECK_THROWS(mem_size(1, 0x30000000, 0x30000000, 0x30000000));
 }
 
+/*************************************************************************
+// ptr util
+**************************************************************************/
+
 int ptr_diff_bytes(const void *a, const void *b) {
     if very_unlikely (a == nullptr) {
         throwCantPack("ptr_diff_bytes null 1; take care");
@@ -105,13 +113,13 @@ int ptr_diff_bytes(const void *a, const void *b) {
     if very_unlikely (b == nullptr) {
         throwCantPack("ptr_diff_bytes null 2; take care");
     }
-    ptrdiff_t d = (const char *) a - (const char *) b;
+    ptrdiff_t d = (const charptr) a - (const charptr) b;
     if (a >= b) {
         if very_unlikely (!mem_size_valid_bytes(d))
-            throwCantPack("ptr_diff_bytes 1; take care");
+            throwCantPack("ptr_diff_bytes-1; take care");
     } else {
-        if very_unlikely (!mem_size_valid_bytes(-d))
-            throwCantPack("ptr_diff_bytes 2; take care");
+        if very_unlikely (!mem_size_valid_bytes(0ll - d))
+            throwCantPack("ptr_diff_bytes-2; take care");
     }
     return ACC_ICONV(int, d);
 }
@@ -124,7 +132,7 @@ unsigned ptr_udiff_bytes(const void *a, const void *b) {
 }
 
 TEST_CASE("ptr_diff") {
-    char buf[4] = {0, 1, 2, 3};
+    byte buf[4] = {0, 1, 2, 3};
     CHECK_THROWS(ptr_diff_bytes(nullptr, buf));
     CHECK_THROWS(ptr_diff_bytes(buf, nullptr));
     CHECK(ptr_diff(buf, buf) == 0);
@@ -134,6 +142,110 @@ TEST_CASE("ptr_diff") {
     CHECK(ptr_udiff(buf + 1, buf) == 1);
     CHECK_THROWS(ptr_udiff(buf, buf + 1));
 }
+
+// check that 2 buffers do not overlap; will throw on error
+void uintptr_check_no_overlap(upx_uintptr_t a, size_t a_size, upx_uintptr_t b, size_t b_size) {
+    if very_unlikely (a == 0 || b == 0)
+        throwCantPack("ptr_check_no_overlap-nullptr");
+    upx_uintptr_t a_end = a + mem_size(1, a_size);
+    upx_uintptr_t b_end = b + mem_size(1, b_size);
+    if very_unlikely (a_end < a || b_end < b) // wrap-around
+        throwCantPack("ptr_check_no_overlap-overflow");
+    // same as (!(a >= b_end || b >= a_end))
+    if (a < b_end && b < a_end)
+        throwCantPack("ptr_check_no_overlap-ab");
+}
+
+// check that 3 buffers do not overlap; will throw on error
+void uintptr_check_no_overlap(upx_uintptr_t a, size_t a_size, upx_uintptr_t b, size_t b_size,
+                              upx_uintptr_t c, size_t c_size) {
+    if very_unlikely (a == 0 || b == 0 || c == 0)
+        throwCantPack("ptr_check_no_overlap-nullptr");
+    upx_uintptr_t a_end = a + mem_size(1, a_size);
+    upx_uintptr_t b_end = b + mem_size(1, b_size);
+    upx_uintptr_t c_end = c + mem_size(1, c_size);
+    if very_unlikely (a_end < a || b_end < b || c_end < c) // wrap-around
+        throwCantPack("ptr_check_no_overlap-overflow");
+    if (a < b_end && b < a_end)
+        throwCantPack("ptr_check_no_overlap-ab");
+    if (a < c_end && c < a_end)
+        throwCantPack("ptr_check_no_overlap-ac");
+    if (b < c_end && c < b_end)
+        throwCantPack("ptr_check_no_overlap-bc");
+}
+
+#if DEBUG
+TEST_CASE("ptr_check_no_overlap 2") {
+    byte p[4] = {};
+
+    auto check_nothrow = [&p](int a, int as, int b, int bs) {
+        CHECK_NOTHROW(ptr_check_no_overlap(p + a, as, p + b, bs)); // ab
+        CHECK_NOTHROW(ptr_check_no_overlap(p + b, bs, p + a, as)); // ba
+    };
+    auto check_throws_ = [&p](int a, int as, int b, int bs) {
+        CHECK_THROWS(ptr_check_no_overlap(p + a, as, p + b, bs)); // ab
+        CHECK_THROWS(ptr_check_no_overlap(p + b, bs, p + a, as)); // ba
+    };
+
+    check_throws_(0, 1, 0, 1);
+    check_nothrow(0, 1, 1, 1);
+    check_throws_(0, 2, 1, 1);
+    check_nothrow(0, 2, 2, 1);
+    // empty buffers at edge
+    check_nothrow(0, 0, 0, 0);
+    check_nothrow(0, 0, 0, 1);
+    check_nothrow(0, 0, 1, 0);
+    // empty buffer
+    check_nothrow(0, 4, 0, 0);
+    check_throws_(0, 4, 1, 0);
+    check_throws_(0, 4, 2, 0);
+    check_throws_(0, 4, 3, 0);
+    check_nothrow(0, 4, 4, 0);
+}
+
+TEST_CASE("ptr_check_no_overlap 3") {
+    byte p[4] = {};
+
+    auto check_nothrow = [&p](int a, int as, int b, int bs, int c, int cs) {
+        CHECK_NOTHROW(ptr_check_no_overlap(p + a, as, p + b, bs, p + c, cs)); // abc
+        CHECK_NOTHROW(ptr_check_no_overlap(p + a, as, p + c, cs, p + b, bs)); // acb
+        CHECK_NOTHROW(ptr_check_no_overlap(p + b, bs, p + a, as, p + c, cs)); // bac
+        CHECK_NOTHROW(ptr_check_no_overlap(p + b, bs, p + c, cs, p + a, as)); // bca
+        CHECK_NOTHROW(ptr_check_no_overlap(p + c, cs, p + a, as, p + b, bs)); // cab
+        CHECK_NOTHROW(ptr_check_no_overlap(p + c, cs, p + b, bs, p + a, as)); // cba
+    };
+    auto check_throws_ = [&p](int a, int as, int b, int bs, int c, int cs) {
+        CHECK_THROWS(ptr_check_no_overlap(p + a, as, p + b, bs, p + c, cs)); // abc
+        CHECK_THROWS(ptr_check_no_overlap(p + a, as, p + c, cs, p + b, bs)); // acb
+        CHECK_THROWS(ptr_check_no_overlap(p + b, bs, p + a, as, p + c, cs)); // bac
+        CHECK_THROWS(ptr_check_no_overlap(p + b, bs, p + c, cs, p + a, as)); // bca
+        CHECK_THROWS(ptr_check_no_overlap(p + c, cs, p + a, as, p + b, bs)); // cab
+        CHECK_THROWS(ptr_check_no_overlap(p + c, cs, p + b, bs, p + a, as)); // cba
+    };
+
+    check_throws_(0, 1, 0, 1, 1, 1);
+    check_nothrow(0, 1, 1, 1, 2, 1);
+    check_throws_(0, 2, 1, 1, 2, 1);
+    check_nothrow(0, 2, 2, 1, 3, 1);
+    // empty buffers at edge
+    check_nothrow(0, 0, 0, 0, 0, 0);
+    check_nothrow(0, 0, 0, 0, 0, 1);
+    check_nothrow(0, 0, 0, 1, 1, 1);
+    check_nothrow(0, 0, 1, 0, 1, 1);
+    // empty buffer
+    check_nothrow(0, 4, 0, 0, 0, 0);
+    check_throws_(0, 4, 1, 0, 0, 0);
+    check_throws_(0, 4, 2, 0, 0, 0);
+    check_throws_(0, 4, 3, 0, 0, 0);
+    check_nothrow(0, 4, 4, 0, 0, 0);
+    // empty buffer
+    check_throws_(0, 4, 0, 0, 1, 0);
+    check_throws_(0, 4, 1, 0, 1, 0);
+    check_throws_(0, 4, 2, 0, 1, 0);
+    check_throws_(0, 4, 3, 0, 1, 0);
+    check_throws_(0, 4, 4, 0, 1, 0);
+}
+#endif // DEBUG
 
 /*************************************************************************
 // bele.h
@@ -148,6 +260,75 @@ namespace N_BELE_RTP {
 const BEPolicy be_policy;
 const LEPolicy le_policy;
 } // namespace N_BELE_RTP
+
+/*************************************************************************
+// stdlib
+**************************************************************************/
+
+void *upx_calloc(size_t n, size_t element_size) {
+    size_t bytes = mem_size(element_size, n); // assert size
+    void *p = malloc(bytes);
+    if (p != nullptr)
+        memset(p, 0, bytes);
+    return p;
+}
+
+// simple unoptimized memswap()
+void upx_memswap(void *a, void *b, size_t n) {
+    if (a != b && n != 0) {
+        char *x = (char *) a;
+        char *y = (char *) b;
+        do {
+            char tmp = *x;
+            *x++ = *y;
+            *y++ = tmp;
+        } while (--n != 0);
+    }
+}
+
+// extremely simple (and beautiful) stable sort: Gnomesort
+// WARNING: O(n^2) and thus very inefficient for large n
+void upx_stable_sort(void *array, size_t n, size_t element_size,
+                     int (*compare)(const void *, const void *)) {
+    for (size_t i = 1; i < n; i++) {
+        char *a = (char *) array + element_size * i;        // a := &array[i]
+        if (i != 0 && compare(a - element_size, a) > 0) {   // if a[-1] > a[0] then
+            upx_memswap(a - element_size, a, element_size); //   swap elements a[-1] <=> a[0]
+            i -= 2;                                         //   and decrease i
+        }
+    }
+}
+
+#if DEBUG
+TEST_CASE("upx_stable_sort") {
+    {
+        unsigned a[] = {0, 1};
+        upx_stable_sort(a, 2, sizeof(*a), ne32_compare);
+        CHECK((a[0] == 0 && a[1] == 1));
+    }
+    {
+        unsigned a[] = {1, 0};
+        upx_stable_sort(a, 2, sizeof(*a), ne32_compare);
+        CHECK((a[0] == 0 && a[1] == 1));
+    }
+    {
+        unsigned a[] = {2, 1, 0};
+        upx_stable_sort(a, 3, sizeof(*a), ne32_compare);
+        CHECK((a[0] == 0 && a[1] == 1 && a[2] == 2));
+    }
+#if __cplusplus >= 202002L // use C++20 std::next_permutation() to test all permutations
+    {
+        upx_uint16_t perm[5] = {0, 1, 2, 3, 4}; // 120 permutations
+        do {
+            upx_uint16_t a[5] = {};
+            memcpy(a, perm, sizeof(perm));
+            upx_stable_sort(a, 5, sizeof(*a), ne16_compare);
+            CHECK((a[0] == 0 && a[1] == 1 && a[2] == 2 && a[3] == 3 && a[4] == 4));
+        } while (std::next_permutation(perm, perm + 5));
+    }
+#endif
+}
+#endif // DEBUG
 
 /*************************************************************************
 // qsort() util
@@ -255,11 +436,11 @@ int __acc_cdecl_qsort le64_compare_signed(const void *e1, const void *e2) {
 
 int find(const void *buf, int blen, const void *what, int wlen) {
     // nullptr is explicitly allowed here
-    if (buf == nullptr || blen <= 0 || what == nullptr || wlen <= 0)
+    if (buf == nullptr || blen < wlen || what == nullptr || wlen <= 0)
         return -1;
 
-    const unsigned char *b = (const unsigned char *) buf;
-    unsigned char first_byte = *(const unsigned char *) what;
+    const byte *b = (const byte *) buf;
+    byte first_byte = *(const byte *) what;
 
     blen -= wlen;
     for (int i = 0; i <= blen; i++, b++)
@@ -270,44 +451,44 @@ int find(const void *buf, int blen, const void *what, int wlen) {
 }
 
 int find_be16(const void *b, int blen, unsigned what) {
-    unsigned char w[2];
+    byte w[2];
     set_be16(w, what);
     return find(b, blen, w, 2);
 }
 
 int find_be32(const void *b, int blen, unsigned what) {
-    unsigned char w[4];
+    byte w[4];
     set_be32(w, what);
     return find(b, blen, w, 4);
 }
 
 int find_be64(const void *b, int blen, upx_uint64_t what) {
-    unsigned char w[8];
+    byte w[8];
     set_be64(w, what);
     return find(b, blen, w, 8);
 }
 
 int find_le16(const void *b, int blen, unsigned what) {
-    unsigned char w[2];
+    byte w[2];
     set_le16(w, what);
     return find(b, blen, w, 2);
 }
 
 int find_le32(const void *b, int blen, unsigned what) {
-    unsigned char w[4];
+    byte w[4];
     set_le32(w, what);
     return find(b, blen, w, 4);
 }
 
 int find_le64(const void *b, int blen, upx_uint64_t what) {
-    unsigned char w[8];
+    byte w[8];
     set_le64(w, what);
     return find(b, blen, w, 8);
 }
 
 TEST_CASE("find") {
     CHECK(find(nullptr, -1, nullptr, -1) == -1);
-    static const unsigned char b[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    static const byte b[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
     CHECK(find(b, 16, b, 0) == -1);
     for (int i = 0; i < 16; i++) {
         CHECK(find(b, 16, b + i, 1) == i);
@@ -327,7 +508,7 @@ TEST_CASE("find") {
 }
 
 int mem_replace(void *buf, int blen, const void *what, int wlen, const void *replacement) {
-    unsigned char *b = (unsigned char *) buf;
+    byte *b = (byte *) buf;
     int boff = 0;
     int n = 0;
 
@@ -364,7 +545,7 @@ static const char dir_sep[] = "/\\";
 #define fn_is_drive(s) (s[0] && s[1] == ':')
 #define fn_is_sep(c) (strchr(dir_sep, c) != nullptr)
 #define fn_skip_drive(s) (fn_is_drive(s) ? (s) + 2 : (s))
-#define fn_tolower(c) (tolower(((unsigned char) (c))))
+#define fn_tolower(c) (tolower(((uchar) (c))))
 
 #else
 

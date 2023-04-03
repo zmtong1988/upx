@@ -14,6 +14,7 @@ CMAKE = cmake
 UPX_CMAKE_BUILD_FLAGS += --parallel
 ifneq ($(VERBOSE),)
   UPX_CMAKE_BUILD_FLAGS += --verbose
+  UPX_CMAKE_CONFIG_FLAGS += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
 # enable this if you prefer Ninja for the actual builds:
 #UPX_CMAKE_CONFIG_FLAGS += -G Ninja
@@ -43,8 +44,9 @@ all: build/debug build/release
 debug: build/debug
 release: build/release
 
-.PHONY: PHONY
 .NOTPARALLEL: # because the actual builds use "cmake --parallel"
+.PHONY: PHONY
+.SECONDEXPANSION:
 .SUFFIXES:
 
 # END of Makefile; extra stuff follows
@@ -113,7 +115,7 @@ build/extra/scan-build/%: CMAKE := scan-build $(CMAKE)
 build/extra/scan-build/%: export CCC_CC  ?= clang
 build/extra/scan-build/%: export CCC_CXX ?= clang++
 
-# cross compiler: Linux glibc aarch64-linux-gnu
+# cross compiler: Linux glibc aarch64-linux-gnu (arm64)
 build/extra/cross-linux-aarch64/debug:   PHONY; $(call run_config_and_build,$@,Debug)
 build/extra/cross-linux-aarch64/release: PHONY; $(call run_config_and_build,$@,Release)
 build/extra/cross-linux-aarch64/%: export CC  = aarch64-linux-gnu-gcc
@@ -125,17 +127,17 @@ build/extra/cross-linux-arm/release: PHONY; $(call run_config_and_build,$@,Relea
 build/extra/cross-linux-arm/%: export CC  = arm-linux-gnueabihf-gcc
 build/extra/cross-linux-arm/%: export CXX = arm-linux-gnueabihf-g++ -Wno-psabi
 
-# cross compiler: Windows x86 win32 MinGW
+# cross compiler: Windows x86 win32 MinGW (i386)
 build/extra/cross-windows-mingw32/debug:   PHONY; $(call run_config_and_build,$@,Debug)
 build/extra/cross-windows-mingw32/release: PHONY; $(call run_config_and_build,$@,Release)
-build/extra/cross-windows-mingw32/%: export CC  = i686-w64-mingw32-gcc
-build/extra/cross-windows-mingw32/%: export CXX = i686-w64-mingw32-g++
+build/extra/cross-windows-mingw32/%: export CC  = i686-w64-mingw32-gcc -static
+build/extra/cross-windows-mingw32/%: export CXX = i686-w64-mingw32-g++ -static
 
-# cross compiler: Windows x64 win64 MinGW
+# cross compiler: Windows x64 win64 MinGW (amd64)
 build/extra/cross-windows-mingw64/debug:   PHONY; $(call run_config_and_build,$@,Debug)
 build/extra/cross-windows-mingw64/release: PHONY; $(call run_config_and_build,$@,Release)
-build/extra/cross-windows-mingw64/%: export CC  = x86_64-w64-mingw32-gcc
-build/extra/cross-windows-mingw64/%: export CXX = x86_64-w64-mingw32-g++
+build/extra/cross-windows-mingw64/%: export CC  = x86_64-w64-mingw32-gcc -static
+build/extra/cross-windows-mingw64/%: export CXX = x86_64-w64-mingw32-g++ -static
 
 # cross compiler: macOS arm64
 build/extra/cross-darwin-arm64/debug:   PHONY; $(call run_config_and_build,$@,Debug)
@@ -143,7 +145,7 @@ build/extra/cross-darwin-arm64/release: PHONY; $(call run_config_and_build,$@,Re
 build/extra/cross-darwin-arm64/%: export CC  = clang -target arm64-apple-darwin
 build/extra/cross-darwin-arm64/%: export CXX = clang++ -target arm64-apple-darwin
 
-# cross compiler: macOS x86_64
+# cross compiler: macOS x86_64 (amd64)
 build/extra/cross-darwin-x86_64/debug:   PHONY; $(call run_config_and_build,$@,Debug)
 build/extra/cross-darwin-x86_64/release: PHONY; $(call run_config_and_build,$@,Release)
 build/extra/cross-darwin-x86_64/%: export CC  = clang -target x86_64-apple-darwin
